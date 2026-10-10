@@ -1,0 +1,12 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve('dist-web');
+const maps = fs.readdirSync(root,{recursive:true}).filter(file=>file.endsWith('.js.map'));
+assert.ok(maps.length,'Build web with source maps first');
+const sources = maps.flatMap(file=>JSON.parse(fs.readFileSync(path.join(root,file),'utf8')).sources);
+const native = sources.filter(source=>/react-native-maps[\\/]|RouteMap\.native/.test(source));
+assert.deepEqual(native,[],'Native map modules must never enter the browser bundle');
+assert.ok(sources.some(source=>source.includes('RouteMap.web')),'Web map missing');
+assert.ok(sources.some(source=>/leaflet[\\/]dist/.test(source)),'Leaflet missing');
+console.log(`Web map isolation passed: ${sources.length} source entries, no native map modules.`);

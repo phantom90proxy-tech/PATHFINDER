@@ -1,0 +1,13 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve('dist');
+const maps = fs.readdirSync(root, {recursive: true}).filter(file => file.endsWith('.map'));
+assert.ok(maps.length, 'Run npm run export:android -- --source-maps first');
+const sources = maps.flatMap(file => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8')).sources);
+assert.ok(sources.some(source => source.includes('RouteMap.android')), 'Android Leaflet renderer missing');
+assert.ok(sources.some(source => source.includes('react-native-webview')), 'WebView missing');
+assert.ok(!sources.some(source => /react-native-maps[\\/]|RouteMap\.native|RouteMap\.web/.test(source)), 'Unexpected Google/native or browser map renderer in Android JS bundle');
+const pkg = require('../package.json');
+assert.ok(pkg.expo.autolinking.android.exclude.includes('react-native-maps'), 'Google Maps native dependency must be excluded on Android');
+console.log('Android map isolation passed: Leaflet/WebView, no react-native-maps JS, Android autolinking exclusion present.');

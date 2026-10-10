@@ -1,0 +1,46 @@
+import {test, expect} from '@playwright/test';
+for (const width of [360, 412, 1024]) {
+  test(`Leaflet pan, zoom, markers, route selection and attribution at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width, height: 850});
+    await page.emulateMedia({reducedMotion: 'reduce'});
+    await page.route('https://tile.openstreetmap.org/**', route => route.abort());
+    await page.goto('/');
+    await page.getByRole('button', {name: 'Where to? Search routes'}).click();
+    await page.getByRole('button', {name: 'Public transport demo'}).click();
+    await page.getByRole('button', {name: 'Choose SM City Masinag - Cogeo Gate 2', exact: true}).click();
+    await page.getByRole('button', {name: 'Compare Routes', exact: true}).click();
+    await page.getByRole('button', {name: 'Select SM City Masinag - Cogeo Gate 2', exact: true}).click();
+    const origin = page.getByTitle('Route origin', {exact: true});
+    await expect(origin).toBeVisible();
+    await origin.click();
+    await expect(page.locator('.leaflet-popup')).toContainText('Origin: SM City Masinag');
+    await page.locator('.leaflet-popup-close-button').click();
+    await expect(page.locator('.leaflet-popup')).toHaveCount(0);
+    const attribution = await page.locator('.leaflet-control-attribution').boundingBox();
+    const sheet = await page.getByTestId('home-sheet').boundingBox();
+    expect(attribution!.y + attribution!.height).toBeLessThan(sheet!.y);
+    await page.getByTitle('Route 2 · Sample', {exact: true}).click();
+    await expect(page.locator('.leaflet-popup')).toContainText('₱25');
+    await page.locator('.leaflet-popup-close-button').click();
+    await expect(page.locator('.leaflet-popup')).toHaveCount(0);
+    await page.getByRole('button', {name: 'Open menu'}).click();
+    await page.getByRole('button', {name: 'Route details and alternatives'}).click();
+    await expect(page.getByRole('button', {name: 'Show Route 2', exact: true})).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', {name: 'Close route details'}).click();
+    const before = await origin.boundingBox();
+    await page.mouse.move(width / 2, 300); await page.mouse.wheel(0, -300); await page.waitForTimeout(500);
+    const zoomed = await origin.boundingBox(); expect(Math.abs(zoomed!.x - before!.x)).toBeGreaterThan(3);
+    await page.mouse.move(width / 2, 320); await page.mouse.down(); await page.mouse.move(width / 2 + 60, 390, {steps: 10}); await page.mouse.up(); await page.waitForTimeout(400);
+    const panned = await origin.boundingBox(); expect(Math.abs(panned!.x - zoomed!.x)).toBeGreaterThan(20);
+    await page.getByRole('button', {name: 'Recenter selected route'}).click();
+    await expect.poll(async () => Math.abs((await origin.boundingBox())!.x - before!.x)).toBeLessThan(3);
+    await page.getByRole('button', {name: 'Where to? Search routes'}).click();
+    await page.getByRole('button', {name: 'Public transport demo', exact: true}).click();
+    await page.getByRole('button', {name: 'Choose SM City Masinag - Cogeo Gate 2', exact: true}).click();
+    await page.getByRole('button', {name: 'Swap origin and destination'}).click();
+    await page.getByRole('button', {name: 'Find Routes', exact: true}).click();
+    await page.getByRole('button', {name: 'View selected route on map'}).click();
+    await expect(page.locator('.search-slide')).toHaveCount(0);
+    await origin.click(); await expect(page.locator('.leaflet-popup')).toContainText('Origin: Cogeo Gate 2');
+  });
+}

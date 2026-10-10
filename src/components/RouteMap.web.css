@@ -1,0 +1,14 @@
+.pathfinder-browser-map .leaflet-container { background: #080f10; font-family: Inter_600SemiBold, sans-serif; }
+.pathfinder-browser-map .leaflet-tile-pane { filter: invert(1) hue-rotate(160deg) saturate(.55) brightness(.8); }
+.pathfinder-browser-map .leaflet-bottom { bottom: var(--map-panel-padding); }
+.pathfinder-browser-map .leaflet-control-attribution { background: #080f10e6; color: #b8f28b; font-size: 9px; }
+.pathfinder-browser-map .leaflet-control-attribution a { color: #8dd8af; }
+.pathfinder-browser-map .leaflet-popup-content-wrapper,
+.pathfinder-browser-map .leaflet-popup-tip { background: #191919; color: white; }
+.pathfinder-browser-map .leaflet-popup-content p { margin: 8px 0 0; }
+.pathfinder-browser-map .leaflet-popup-close-button { color: #b8f28b; }
+.pathfinder-map-pin { display: block; width: 24px; height: 24px; box-sizing: border-box; border: 2px solid #080f10; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 5px #0008; }
+.pathfinder-map-pin::after { content: ''; position: absolute; width: 7px; height: 7px; background: #080f10; border-radius: 50%; left: 6.5px; top: 6.5px; }
+.pathfinder-map-error { position: absolute; top: 84px; left: 16px; right: 16px; padding: 12px; background: #191919; color: #b8f28b; z-index: 1000; font-family: sans-serif; }
+.pathfinder-map-error button { display: block; min-height: 44px; background: none; border: 0; color: #9be570; font: inherit; cursor: pointer; }
+.pathfinder-map-error button:disabled { opacity: .5; cursor: default; }

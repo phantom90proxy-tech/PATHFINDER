@@ -1,0 +1,55 @@
+import {test, expect} from '@playwright/test';
+
+test.beforeEach(async ({page, context}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  await page.route('https://tile.openstreetmap.org/**', route => route.fulfill({contentType: 'image/png', path: 'e2e/fixtures/tile.png'}));
+  await context.route('https://www.google.com/maps/**', route => route.fulfill({contentType: 'text/html', body: '<p>External directions fixture</p>'}));
+});
+test('results and details open selected reversed endpoints in a new tab without changing selection', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Where to? Search routes'}).click();
+  await page.getByRole('button', {name: 'Public transport demo', exact: true}).click();
+  await page.getByRole('button', {name: 'Choose SM City Masinag - Cogeo Gate 2', exact: true}).click();
+  await page.getByRole('button', {name: 'Swap origin and destination'}).click();
+  await page.getByRole('button', {name: 'Find Routes', exact: true}).click();
+  await page.getByRole('button', {name: 'Select Route 2', exact: true}).click();
+  const before = page.url();
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('button', {name: 'Navigate with Google Maps', exact: true}).click();
+  const popup = await popupPromise;
+  await popup.waitForURL('https://www.google.com/maps/**');
+  const params = new URL(popup.url()).searchParams;
+  expect(params.get('origin')).toBe('14.62141,121.16854');
+  expect(params.get('destination')).toBe('14.62545,121.12115');
+  expect(params.get('travelmode')).toBe('driving');
+  expect(await popup.evaluate(() => window.opener === null)).toBe(true);
+  await popup.close();
+  expect(page.url()).toBe(before);
+  await expect(page.getByRole('button', {name: 'Select Route 2', exact: true})).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', {name: 'View selected route on map'}).click();
+  await page.getByRole('button', {name: 'Open menu'}).click();
+  await page.getByRole('button', {name: 'Route details and alternatives'}).click();
+  await expect(page.getByRole('button', {name: 'Navigate with Google Maps'})).toHaveCount(1);
+  const nextPopup = page.waitForEvent('popup');
+  await page.getByRole('button', {name: 'Navigate with Google Maps'}).click();
+  const detailsTab = await nextPopup; await detailsTab.waitForURL('https://www.google.com/maps/**');
+  expect(new URL(detailsTab.url()).search).toBe(new URL(popup.url()).search);
+  await detailsTab.close();
+  await expect(page.getByRole('button', {name: 'Show Route 2', exact: true})).toHaveAttribute('aria-pressed', 'true');
+});
+test('blocked browser opening displays recovery text and keeps the page and route', async ({page}) => {
+  await page.addInitScript(() => {window.open = () => null;});
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Where to? Search routes'}).click();
+  await page.getByRole('button', {name: 'Public transport demo'}).click();
+  await page.getByRole('button', {name: 'Choose SM City Masinag - Cogeo Gate 2', exact: true}).click();
+  await page.getByRole('button', {name: 'Compare Routes', exact: true}).click();
+  await page.getByRole('button', {name: 'Select SM City Masinag - Cogeo Gate 2', exact: true}).click();
+  await page.getByRole('button', {name: 'Open menu'}).click();
+  await page.getByRole('button', {name: 'Route details and alternatives'}).click();
+  const before = page.url();
+  await page.getByRole('button', {name: 'Navigate with Google Maps'}).click();
+  await expect(page.getByRole('alert')).toContainText('Allow pop-ups');
+  expect(page.url()).toBe(before);
+  await expect(page.getByRole('button', {name: 'Show SM City Masinag - Cogeo Gate 2', exact: true})).toHaveAttribute('aria-pressed', 'true');
+});
