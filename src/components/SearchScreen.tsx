@@ -119,8 +119,8 @@ export function SearchScreen({onReturnHome}: {onReturnHome: () => void}) {
     </View>
     <ScrollView aria-hidden={phase !== null} accessibilityElementsHidden={phase !== null} importantForAccessibility={phase !== null ? 'no-hide-descendants' : 'auto'} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
       <View style={[s.preferences, {marginBottom: 16}]}>
-        <Button label="Road driving routes" disabled={routing || locating} selected={driving} onPress={() => setSearchMode('driving')} style={[s.preference, driving && s.preferenceSelected]}><Icon name="car" color={GREEN} /><Text style={s.preferenceText}>Road driving</Text></Button>
-        <Button label="Public transport demo" disabled={routing || locating} selected={!driving} onPress={() => setSearchMode('demo')} style={[s.preference, !driving && s.preferenceSelected]}><Icon name="bus" color={GREEN} /><Text style={s.preferenceText}>Transit demo</Text></Button>
+        <Button label="Road driving routes" disabled={routing || locating} selected={driving} onPress={() => setSearchMode('driving')} style={[s.preference, driving && s.preferenceSelected]}><Icon name="car" color={GREEN} /><Text style={s.preferenceText}>Road Finder</Text></Button>
+        <Button label="Public transport demo" disabled={routing || locating} selected={!driving} onPress={() => setSearchMode('demo')} style={[s.preference, !driving && s.preferenceSelected]}><Icon name="bus" color={GREEN} /><Text style={s.preferenceText}>Commute Finder</Text></Button>
       </View>
       <View style={s.locationCard} onLayout={({nativeEvent: {layout}}) => setCardSize(current => current.width === layout.width && current.height === layout.height ? current : {width: layout.width, height: layout.height})}>
         {cardSize.width > 0 && <Svg pointerEvents="none" {...(Platform.OS === 'web' ? {'aria-hidden': true, focusable: false} : {accessible: false})} style={StyleSheet.absoluteFill} width={cardSize.width} height={cardSize.height}>
