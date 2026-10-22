@@ -3,6 +3,7 @@ import type * as Leaflet from 'leaflet';
 import {isRoadRoute, routeSummary, routeLabel, tripEndpoints} from '../data/roadRoutes';
 import {mapViewport} from '../data/mapViewport';
 import {createTileFailures} from '../map/tileFailures';
+import {acquireLeafletStyles} from '../map/leafletStyles';
 import type {MapHandle, RouteMapProps} from './RouteMap.types';
 import './RouteMap.web.css';
 
@@ -13,19 +14,6 @@ type Runtime = {
   origin: Leaflet.Marker; destination: Leaflet.Marker; routeLayers: Leaflet.LayerGroup;
   retryTiles: () => boolean;
 };
-let stylesReady: Promise<void> | undefined;
-function loadStyles() {
-  // Expo's CSS transformer cannot resolve Leaflet's relative image URLs.
-  // Serve the unmodified, locally vendored stylesheet/images through public/.
-  return stylesReady ??= new Promise<void>((resolve, reject) => {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = '/leaflet/leaflet.css';
-    link.onload = () => resolve();
-    link.onerror = () => reject(new Error('Leaflet styles failed to load'));
-    document.head.append(link);
-  });
-}
 function popup(title: string, description: string) {
   const element = document.createElement('div');
   const heading = document.createElement('strong');
@@ -43,6 +31,7 @@ export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap(
   const select = useRef(onSelect);
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [tileError, setTileError] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -51,20 +40,22 @@ export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap(
     let cancelled = false;
     let instance: Leaflet.Map | undefined;
     const failures = createTileFailures<HTMLImageElement>();
+    const styles = acquireLeafletStyles();
     // Leaflet evaluates window/document: load only after mounting, never in SSR.
-    Promise.all([import('leaflet'), loadStyles()]).then(([L]) => {
+    Promise.all([import('leaflet'), styles.promise]).then(([L]) => {
       if (cancelled || !container.current) return;
       const map = L.map(container.current, {
         zoomControl: false, attributionControl: true, zoomSnap: 0.25,
         scrollWheelZoom: true, dragging: true, touchZoom: true,
-      }).setView([14.6234, 121.1448], 13);
+      });
       instance = map;
+      map.setView([14.6234, 121.1448], 13);
       map.attributionControl.setPrefix(false);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19, keepBuffer: 0, updateWhenIdle: true,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> · <a href="https://www.openstreetmap.org/fixthemap">Fix the map</a>',
-      }).on('tileerror', event => {failures.fail(event.tile as HTMLImageElement); setTileError(failures.count());})
-        .on('tileload tileunload', event => {failures.loaded((event as Leaflet.TileEvent).tile as HTMLImageElement); setTileError(failures.count());}).addTo(map);
+      }).on('tileerror', event => {if (!cancelled) {failures.fail(event.tile as HTMLImageElement); setTileError(failures.count());}})
+        .on('tileload tileunload', event => {if (!cancelled) {failures.loaded((event as Leaflet.TileEvent).tile as HTMLImageElement); setTileError(failures.count());}}).addTo(map);
       const marker = (point: {latitude: number; longitude: number}, color: string, title: string) => {
         const element = document.createElement('span');
         element.className = 'pathfinder-map-pin';
@@ -82,9 +73,15 @@ export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap(
         if (tile.isConnected) tile.src = tile.src;
         else failures.unloaded(tile);
       })});
-    }).catch(() => {if (!cancelled) setError(true);});
-    return () => {cancelled = true; instance?.remove(); failures.clear(); clearTimeout(retryTimer.current);};
-  }, []);
+    }).catch(() => {
+      if (cancelled) return;
+      cancelled = true;
+      instance?.remove(); instance = undefined;
+      styles.release(); failures.clear();
+      setTileError(0); setError(true);
+    });
+    return () => {cancelled = true; styles.release(); instance?.remove(); failures.clear(); clearTimeout(retryTimer.current);};
+  }, [attempt]);
 
   useEffect(() => {
     if (!runtime || !route || !isRoadRoute(route)) return;
@@ -186,6 +183,9 @@ export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap(
         retryTimer.current = setTimeout(() => setRetrying(false), 5000);
       }}>Retry tiles</button>
     </div>}
-    {error && <div role="alert" className="pathfinder-map-error">Map could not load. Reload to retry.</div>}
+    {!runtime && !error && <div role="status" className="pathfinder-map-error">Loading map…</div>}
+    {error && <div role="alert" className="pathfinder-map-error">Map could not load.
+      <button onClick={() => {setError(false); setRuntime(null); setTileError(0); setRetrying(false); setAttempt(value => value + 1);}}>Retry map</button>
+    </div>}
   </div>;
 });

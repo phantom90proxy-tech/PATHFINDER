@@ -44,6 +44,56 @@ be refreshed. No background location is configured. Permission denial, disabled
 location services, timeouts, offline routing, no routes and server errors have
 user feedback. Failed requests preserve previously loaded routes.
 
+## Saved journeys
+
+Choose **Save journey** in route results or Home's route details, then open
+**Menu > Saved routes** to view or delete it. Saved details survive app restarts
+and can be viewed without a connection once the app is loaded. This does not
+provide offline maps, navigation, or an offline Web app installation. Opening a
+saved journey does not change the active trip or request fresh routes.
+
+Only explicitly saved endpoint coordinates, route geometry, and displayed route
+details are persisted locally with AsyncStorage (unencrypted); no GPS fix history
+is saved. Snapshots may become outdated and are not live traffic or transit data.
+Up to 50 journeys and 4 million serialized characters are supported, subject to
+device/browser storage limits. Storage errors leave the last successful data
+unchanged; unreadable data is not silently overwritten. Browser storage clearing
+or app-data removal deletes these local saves. A new native build must include
+the added AsyncStorage dependency.
+
+## Journey History
+
+Menu > Journey History shows the last 20 explicitly selected journeys, newest
+first. A route-card selection, View selected route on map, or a map/details route
+selection records a local snapshot. Merely receiving search results, choosing a
+place candidate, GPS updates, failed searches, and viewing history do not record
+journeys. Re-selecting the same endpoints and route updates its selection time
+and snapshot instead of adding a duplicate. No raw search queries or GPS fix
+metadata are stored.
+
+History uses its own AsyncStorage key, independent of Saved routes. Individual
+deletion and confirmed Clear History never delete saved routes or change the
+active trip. Historical details are previously retrieved estimates and may be
+outdated; opening them does not request fresh routes or provide offline maps.
+Storage failures retain the last successful history. Unreadable data stays
+untouched unless Clear History is explicitly confirmed. No new dependency,
+account, backend, or cloud synchronization is used.
+
+## Local storage coordination
+
+Saved Routes and Journey History use separate Web Locks and re-read validated
+storage inside each mutation. Storage events and focus/resume reconcile other
+tabs without changing the active trip or requesting routes. Web writes require
+Web Locks on HTTPS or localhost; unavailable, denied or timed-out coordination
+blocks writes with an error while previously stored details remain readable.
+Reload all tabs after upgrading: older app versions and external storage writers
+do not participate in this cooperative locking protocol.
+
+Android continues to use AsyncStorage with per-key queues shared within the JS
+runtime. This does not coordinate independent native processes/runtimes. No
+native multi-process safety or physical-device verification is claimed. Restart
+Recovery keeps its separate, existing storage behavior and is not cross-tab locked.
+
 ## Public service limits and privacy
 
 OSRM is for limited prototype testing, not a production routing guarantee. The
@@ -54,7 +104,8 @@ Retry-After with a minimum one-minute cooldown. Limits are per app instance; the
 do not make large multi-user deployments suitable for the public demo.
 
 Coordinates go directly to OSRM only after Find/Compare; service operators may
-log requests. GPS and route cache are not saved to disk. Map tile requests expose
+log requests. Live GPS fixes and the route request cache are not saved to disk;
+explicitly saved or selected journeys persist as described above. Map tile requests expose
 the viewed area to OSM. Driving estimates include no live traffic, crowding,
 transit service, fares or validated jeepney/bus directions.
 

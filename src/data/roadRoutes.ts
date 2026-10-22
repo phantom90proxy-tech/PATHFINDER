@@ -1,4 +1,6 @@
 import type {Coordinate, Route} from './routes';
+import {fareForRoute, fareLabel} from '../services/fareInformation.ts';
+import {crowdingForRoute, crowdingLabel, transportationInformation} from '../services/transportationInformation.ts';
 
 export type LocationFix = Coordinate & {accuracy: number | null; timestamp: number};
 export type RoadSnap = {requested: Coordinate; snapped: Coordinate; distanceMeters: number};
@@ -36,9 +38,10 @@ export function routeLabel(route: MapRoute, reversed = false) {
     ? `${endpoints.origin} - ${endpoints.destination}` : route.label;
 }
 export function routeSummary(route: MapRoute) {
+  const info = transportationInformation(route);
   return isRoadRoute(route)
-    ? `${(route.distanceMeters / 1000).toFixed(1)} km · ${Math.max(1, Math.round(route.durationSeconds / 60))} min estimated · Driving`
-    : `${route.transport} · ₱${route.fare} · ${route.minutes} min · ${route.crowd} (demo)`;
+    ? `${(route.distanceMeters / 1000).toFixed(1)} km · ${Math.max(1, Math.round(route.durationSeconds / 60))} min estimated · Driving · Fare unavailable · Crowding unavailable`
+    : `${info.mode.label} · ${fareLabel(fareForRoute(route))} · ${info.travelTime.classification === 'demo' ? `Demo travel time: ${route.minutes} min` : info.travelTime.label} · ${crowdingLabel(crowdingForRoute(route))}`;
 }
 export function validCoordinate(point: Coordinate) {
   return Number.isFinite(point.latitude) && Number.isFinite(point.longitude) && Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180;

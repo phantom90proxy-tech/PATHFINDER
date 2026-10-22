@@ -1,5 +1,6 @@
 import type {Coordinate} from '../data/routes';
 import type {RoadRoute, RoadSnap} from '../data/roadRoutes';
+import {createRequestCancellation, RequestCancelledError} from './requestCancellation.ts';
 
 const validPoint = (p: Coordinate) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180;
 type Request = {origin: Coordinate; destination: Coordinate; originLabel: string; destinationLabel: string};
@@ -42,21 +43,22 @@ export function createRoadRouter({fetcher = fetch, now = Date.now, timeoutMs = 1
   const cache = new Map<string, {routes: RoadRoute[]; time: number}>();
   let nextRequestAt = 0;
   let inFlight = false;
-  return async (request: Request): Promise<Result> => {
+  return async (request: Request, signal?: AbortSignal, options?: {forceRefresh?: boolean}): Promise<Result> => {
+    if (signal?.aborted) throw new RequestCancelledError();
     if (!validPoint(request.origin) || !validPoint(request.destination)) throw new Error('Enter valid coordinates.');
     const coordinate = (p: Coordinate) => `${p.longitude.toFixed(6)},${p.latitude.toFixed(6)}`;
     const key = `${coordinate(request.origin)};${coordinate(request.destination)}`;
     if (coordinate(request.origin) === coordinate(request.destination)) throw new Error('Choose different origin and destination points.');
     const stored = cache.get(key);
-    if (stored && now() - stored.time < 5 * 60_000) return {cached: true, routes: stored.routes.map(route => ({...route, origin: request.originLabel, destination: request.destinationLabel}))};
+    if (!options?.forceRefresh && stored && now() - stored.time < 5 * 60_000) return {cached: true, routes: stored.routes.map(route => ({...route, origin: request.originLabel, destination: request.destinationLabel}))};
     if (inFlight) throw new Error('A route request is already running. Please wait.');
     if (now() < nextRequestAt) throw new Error(`Please wait ${Math.ceil((nextRequestAt - now()) / 1000)} seconds before requesting another route.`);
     nextRequestAt = now() + 5000;
     inFlight = true;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const cancellation = createRequestCancellation(signal);
+    cancellation.startTimeout(timeoutMs);
     try {
-      const response = await fetcher(`https://router.project-osrm.org/route/v1/driving/${key}?overview=full&geometries=geojson&alternatives=true&steps=false&generate_hints=false&radiuses=1000;1000`, {signal: controller.signal, headers: {Accept: 'application/json', ...headers}});
+      const response = await cancellation.run(() => fetcher(`https://router.project-osrm.org/route/v1/driving/${key}?overview=full&geometries=geojson&alternatives=true&steps=false&generate_hints=false&radiuses=1000;1000`, {signal: cancellation.signal, headers: {Accept: 'application/json', ...headers}}));
       if (response.status === 429) {
         const retry = response.headers.get('Retry-After');
         const seconds = retry && /^\d+$/.test(retry) ? Number(retry) : retry ? Math.max(0, (Date.parse(retry) - now()) / 1000) : 60;
@@ -64,15 +66,17 @@ export function createRoadRouter({fetcher = fetch, now = Date.now, timeoutMs = 1
         throw new Error('The demo routing server is busy. Wait at least a minute before trying again.');
       }
       if (!response.ok && response.status !== 400) throw new Error(`Routing service unavailable (${response.status}). Existing routes are kept; try again later.`);
-      const routes = parseRoadResponse(await response.json(), request, now());
+      const routes = parseRoadResponse(await cancellation.run(() => response.json()), request, now());
+      cancellation.check();
       if (cache.size >= 10) cache.delete(cache.keys().next().value!);
       cache.set(key, {routes, time: now()});
       return {routes, cached: false};
     } catch (error) {
-      if (controller.signal.aborted) throw new Error('Routing timed out. Check your connection and try again.');
+      if (cancellation.cancelled) throw new RequestCancelledError();
+      if (cancellation.signal.aborted) throw new Error('Routing timed out. Check your connection and try again.');
       if (error instanceof TypeError) throw new Error('Could not reach the routing server. Check your connection. Previously loaded routes remain available.');
       if (error instanceof SyntaxError) throw new Error('The routing server sent an unreadable response. Try again later.');
       throw error;
-    } finally {clearTimeout(timeout); inFlight = false;}
+    } finally {cancellation.dispose(); inFlight = false;}
   };
 }

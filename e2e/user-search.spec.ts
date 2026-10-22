@@ -12,6 +12,42 @@ async function start(page: Page) {
   await page.goto('/');
   await page.getByRole('button', {name: 'Where to? Search routes'}).click();
 }
+
+for (const textScale of [1, 2]) test(`place attribution and Unicode labels remain readable at ${textScale}x text size`, async ({page}) => {
+  await page.setViewportSize({width: 360, height: 740});
+  const attribution = 'Location search: Photon · © OpenStreetMap contributors.';
+  const place = 'Café Peñafrancia – 東京, Antipolo';
+  await page.route('https://photon.komoot.io/**', route => route.fulfill({json: {features: [
+    {geometry: {type: 'Point', coordinates: [121.1, 14.6]}, properties: {name: 'Café Peñafrancia – 東京', city: 'Antipolo'}},
+  ]}}));
+  await page.route('https://router.project-osrm.org/**', route => route.fulfill({json: {code: 'Ok', routes: [
+    {distance: 2000, duration: 300, geometry: {type: 'LineString', coordinates: [[121.1, 14.6], [121.2, 14.5]]}},
+  ]}}));
+  await start(page);
+  await expect(page.getByText(attribution, {exact: false})).toBeVisible();
+  await page.getByRole('textbox', {name: 'Origin', exact: true}).fill('Café Peñafrancia – 東京');
+  await page.getByRole('textbox', {name: 'Destination', exact: true}).fill('14.5,121.2');
+  await page.getByRole('button', {name: 'Find Routes', exact: true}).click();
+  const credit = page.getByText(attribution, {exact: true});
+  if (textScale === 2) await credit.evaluate(element => {
+    const style = getComputedStyle(element);
+    element.style.fontSize = `${parseFloat(style.fontSize) * 2}px`;
+    element.style.lineHeight = `${parseFloat(style.lineHeight) * 2}px`;
+  });
+  await credit.scrollIntoViewIfNeeded();
+  await expect(credit).toBeVisible();
+  await expect(credit).toHaveText(attribution);
+  const layout = await credit.evaluate(element => ({
+    width: element.getBoundingClientRect().width, viewport: window.innerWidth,
+    clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+    clientHeight: element.clientHeight, scrollHeight: element.scrollHeight,
+  }));
+  expect(layout.width).toBeLessThanOrEqual(layout.viewport);
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
+  expect(layout.scrollHeight).toBeLessThanOrEqual(layout.clientHeight + 1);
+  await page.getByRole('button', {name: place, exact: true}).click();
+  await expect(page.getByTestId('discovery-origin')).toHaveText(place);
+});
 test('startup has empty inputs, no route layers, no navigation trip and required validation', async ({page}) => {
   let requests = 0;
   await page.route(/photon\.komoot|router\.project-osrm/, route => {requests++; return route.abort();});
@@ -72,10 +108,40 @@ test('confirmed arbitrary places drive results, comparison, Google Maps and reve
   // Preserve OSRM's existing request throttle.
   await page.waitForTimeout(5100);
   await page.getByRole('button', {name: 'Find Routes', exact: true}).click();
-  await page.getByRole('button', {name: 'Fort Santiago, Manila', exact: true}).click();
-  await page.getByRole('button', {name: 'Rizal Park, Manila', exact: true}).click();
   await expect(page.getByTestId('discovery-origin')).toHaveText('Fort Santiago, Manila');
   expect(requested[1]).toContain('120.970000,14.600000;120.980000,14.580000');
+});
+
+test('identical place queries are confirmed independently and survive reversal', async ({page}) => {
+  const requested: string[] = [];
+  await page.route('https://photon.komoot.io/**', route => route.fulfill({json: {features: [
+    {geometry: {type: 'Point', coordinates: [121.1, 14.6]}, properties: {name: 'Central Station', city: 'North City'}},
+    {geometry: {type: 'Point', coordinates: [121.2, 14.5]}, properties: {name: 'Central Station', city: 'South City'}},
+  ]}}));
+  await page.route('https://router.project-osrm.org/**', route => {
+    requested.push(route.request().url());
+    const coordinates = new URL(route.request().url()).pathname.split('/').pop()!.split(';').map(pair => pair.split(',').map(Number));
+    return route.fulfill({json: {code: 'Ok', routes: [{distance: 2000, duration: 300, geometry: {type: 'LineString', coordinates}}]}});
+  });
+  await start(page);
+  await page.getByRole('textbox', {name: 'Origin', exact: true}).fill('Central Station');
+  await page.getByRole('textbox', {name: 'Destination', exact: true}).fill('Central Station');
+  await page.getByRole('button', {name: 'Find Routes', exact: true}).click();
+  await expect(page.getByText('Choose your origin.', {exact: false})).toBeVisible();
+  await page.getByRole('button', {name: 'Central Station, North City', exact: true}).click();
+  await expect(page.getByText('Choose your destination.', {exact: false})).toBeVisible();
+  expect(requested).toHaveLength(0);
+  await page.getByRole('button', {name: 'Central Station, South City', exact: true}).click();
+  await expect(page.getByTestId('discovery-origin')).toHaveText('Central Station, North City');
+  await expect(page.getByTestId('discovery-destination')).toHaveText('Central Station, South City');
+  expect(requested[0]).toContain('121.100000,14.600000;121.200000,14.500000');
+  await page.getByRole('button', {name: 'Back to Plan your ride'}).click();
+  await page.getByRole('button', {name: 'Swap origin and destination'}).click();
+  await page.waitForTimeout(5100);
+  await page.getByRole('button', {name: 'Compare Routes', exact: true}).click();
+  await expect(page.getByTestId('discovery-origin')).toHaveText('Central Station, South City');
+  await expect(page.getByTestId('discovery-destination')).toHaveText('Central Station, North City');
+  expect(requested[1]).toContain('121.200000,14.500000;121.100000,14.600000');
 });
 for (const failure of ['empty', 'offline', 'invalid coordinates']) test(`location ${failure} never falls back to sample routes`, async ({page}) => {
   let roads = 0, lookups = 0;

@@ -1,0 +1,43 @@
+import {test,expect} from '@playwright/test';
+import recorded from './fixtures/osrm-masinag.json';
+test.beforeEach(async ({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.route('https://tile.openstreetmap.org/**',route=>route.fulfill({contentType:'image/png',path:'e2e/fixtures/tile.png'}));
+});
+test('demo comparison, map and saved/history details label sample pesos without price claims',async ({page})=>{
+  await page.goto('/search');
+  await page.getByRole('button',{name:'Public transport demo',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Choose SM City Masinag - Cogeo Gate 2',exact:true})).toContainText('Demo fare ₱18');
+  await expect(page.getByRole('button',{name:'Sort by lowest demo fare'})).toBeVisible();
+  await page.getByRole('textbox',{name:'Origin',exact:true}).fill('SM City Masinag');
+  await page.getByRole('textbox',{name:'Destination',exact:true}).fill('Cogeo Gate 2');
+  await page.getByRole('button',{name:'Find Routes',exact:true}).click();
+  const first=page.getByRole('button',{name:'Select SM City Masinag - Cogeo Gate 2',exact:true});
+  const second=page.getByRole('button',{name:'Select Route 2',exact:true});
+  await expect(first).toContainText('Demo fare ₱18');
+  await expect(first).toContainText('Lowest demo fare');
+  await expect(second).toContainText('₱7 more than lowest demo fare');
+  await expect(page.getByTestId('route-discovery')).not.toContainText('Best for cheapest');
+  await expect(page.getByTestId('route-discovery').getByText(/not verified prices or booking\/payment quotes/)).toBeVisible();
+  await second.click();
+  await page.getByRole('button',{name:'Save selected journey',exact:true}).click();
+  await page.getByRole('button',{name:'View selected route on map'}).click();
+  await page.getByRole('button',{name:'Open menu'}).click();
+  await page.getByRole('button',{name:'Route details and alternatives'}).click();
+  await expect(page.getByRole('button',{name:'Show Route 2',exact:true})).toContainText('Demo fare ₱25');
+  await page.goto('/saved');
+  await expect(page.getByText(/Demo fare ₱25/).first()).toBeVisible();
+  await page.goto('/history');
+  await expect(page.getByText(/Demo fare ₱25/).first()).toBeVisible();
+});
+test('road fares remain unavailable without changing driving estimates or ranking',async ({page})=>{
+  await page.route('https://router.project-osrm.org/**',route=>route.fulfill({json:recorded}));
+  await page.goto('/search');
+  await page.getByRole('textbox',{name:'Origin',exact:true}).fill('SM City Masinag');
+  await page.getByRole('textbox',{name:'Destination',exact:true}).fill('Cogeo Gate 2');
+  await page.getByRole('button',{name:'Find Routes',exact:true}).click();
+  const card=page.getByRole('button',{name:'Select Driving route 1',exact:true});
+  await expect(card).toContainText('Fare unavailable');
+  await expect(card).not.toContainText('₱');
+  await expect(card).not.toContainText('Lowest demo fare');
+});

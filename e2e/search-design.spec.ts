@@ -22,8 +22,8 @@ for (const width of [320, 412, 1024]) {
     await expect(page.getByRole('textbox', {name: 'Destination', exact: true})).toHaveValue('Cogeo Gate 2');
     await page.getByRole('button', {name: 'Swap origin and destination'}).click();
     await expect(page.getByRole('textbox', {name: 'Origin', exact: true})).toHaveValue('Cogeo Gate 2');
-    await page.getByRole('button', {name: 'Sort by Less Crowded'}).click();
-    await expect(page.getByRole('button', {name: 'Sort by Less Crowded'})).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', {name: 'Sort by demo crowding'}).click();
+    await expect(page.getByRole('button', {name: 'Sort by demo crowding'})).toHaveAttribute('aria-pressed', 'true');
     for (const label of ['Find Routes', 'Compare Routes', 'Swap origin and destination']) {
       const box = await page.getByRole('button', {name: label, exact: true}).boundingBox();
       expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -33,7 +33,7 @@ for (const width of [320, 412, 1024]) {
     await page.getByRole('button', {name: 'Back to map'}).focus();
     await page.screenshot({path: `test-results/search-${width}.png`});
     await page.getByRole('button', {name: 'Compare Routes', exact: true}).click();
-    await expect(page.getByText('Best for less crowded')).toBeVisible();
+    await expect(page.getByText('Lowest demo crowding')).toBeVisible();
     await page.getByRole('button', {name: 'Select Route 2', exact: true}).click();
     await expect(page.locator('.search-slide')).toHaveCount(0);
     await expect(page.getByRole('button', {name: 'Where to? Search routes'})).toBeVisible();

@@ -1,0 +1,48 @@
+import {test,expect} from '@playwright/test';
+import recorded from './fixtures/osrm-masinag.json';
+test.beforeEach(async ({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.route('https://tile.openstreetmap.org/**',route=>route.fulfill({contentType:'image/png',path:'e2e/fixtures/tile.png'}));
+});
+test('demo crowding and unavailable service information remain explicit in comparison, home, saved and history',async ({page})=>{
+  await page.goto('/search');
+  await page.getByRole('button',{name:'Public transport demo',exact:true}).click();
+  await page.getByRole('button',{name:'Sort by demo crowding'}).click();
+  await page.getByRole('textbox',{name:'Origin',exact:true}).fill('SM City Masinag');
+  await page.getByRole('textbox',{name:'Destination',exact:true}).fill('Cogeo Gate 2');
+  await page.getByRole('button',{name:'Find Routes',exact:true}).click();
+  const card=page.getByRole('button',{name:'Select Route 2',exact:true});
+  await expect(card).toContainText('Demo crowding: Less Crowded');
+  await expect(card).toHaveAccessibleDescription(/Demo crowding: Less Crowded/);
+  await expect(card).toContainText('Lowest demo crowding');
+  await expect(card).toContainText('Demo mode: Bus + Jeep');
+  await expect(card).toContainText('Demo travel time');
+  await expect(page.getByTestId('route-discovery')).toContainText('Waiting time, service frequency, schedules and operating hours: unavailable');
+  await card.click();
+  await page.getByRole('button',{name:'Save selected journey',exact:true}).click();
+  await page.getByRole('button',{name:'View selected route on map'}).click();
+  await page.getByRole('button',{name:'Open menu'}).click();
+  await page.getByRole('button',{name:'Route details and alternatives'}).click();
+  await expect(page.getByRole('button',{name:'Show Route 2',exact:true})).toContainText('Demo crowding: Less Crowded');
+  await expect(page.getByRole('button',{name:'Show Route 2',exact:true})).toHaveAccessibleDescription(/Demo crowding: Less Crowded/);
+  await page.goto('/saved');
+  await page.getByRole('button',{name:/^Open saved journey /}).click();
+  await expect(page.getByTestId('saved-journey-details')).toContainText('Demo crowding: Less Crowded');
+  await expect(page.getByTestId('saved-journey-details')).toContainText('Demo transfers: 2 sample transfers');
+  await page.goto('/history');
+  await page.getByRole('button',{name:/^Open history journey /}).click();
+  await expect(page.getByTestId('history-journey-details')).toContainText('Demo crowding: Less Crowded');
+  await expect(page.getByTestId('history-journey-details')).toContainText('schedules and operating hours: unavailable');
+});
+test('road results have unavailable crowding and no crowd recommendation or invented frequency',async ({page})=>{
+  await page.route('https://router.project-osrm.org/**',route=>route.fulfill({json:recorded}));
+  await page.goto('/search');
+  await page.getByRole('textbox',{name:'Origin',exact:true}).fill('SM City Masinag');
+  await page.getByRole('textbox',{name:'Destination',exact:true}).fill('Cogeo Gate 2');
+  await page.getByRole('button',{name:'Find Routes',exact:true}).click();
+  const card=page.getByRole('button',{name:'Select Driving route 1',exact:true});
+  await expect(card).toContainText('Crowding unavailable');
+  await expect(card).toContainText('Estimated driving time (OSRM)');
+  await expect(card).not.toContainText('Demo crowding');
+  await expect(card).not.toContainText('Lowest demo crowding');
+});

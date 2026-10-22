@@ -1,4 +1,5 @@
 import type {Coordinate} from '../data/routes';
+import {createRequestCancellation, RequestCancelledError} from './requestCancellation.ts';
 
 export type Place = {label: string; point: Coordinate};
 // Public Photon service: explicit searches only, modest usage, no availability SLA.
@@ -18,7 +19,8 @@ export function parsePlaces(body: unknown): Place[] {
 export function createPlaceSearch({fetcher = fetch, now = Date.now, timeoutMs = 12000, intervalMs = 1100}: {fetcher?: typeof fetch; now?: () => number; timeoutMs?: number; intervalMs?: number} = {}) {
   const cache = new Map<string, {places: Place[]; at: number}>();
   let busy = false, next = 0;
-  return async (text: string): Promise<Place[]> => {
+  return async (text: string, signal?: AbortSignal): Promise<Place[]> => {
+    if (signal?.aborted) throw new RequestCancelledError();
     const query = text.trim();
     if (query.length < 2 || query.length > 240) throw new Error('Enter a place or address between 2 and 240 characters. Include the city for better matches.');
     const key = query.toLowerCase().replace(/\s+/g, ' '), saved = cache.get(key);
@@ -26,25 +28,26 @@ export function createPlaceSearch({fetcher = fetch, now = Date.now, timeoutMs = 
     if (busy) throw new Error('A location search is already running. Please wait.');
     if (next - now() > intervalMs) throw new Error('Location search is busy. Wait a minute before trying again.');
     busy = true;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const request = createRequestCancellation(signal);
     try {
-      await new Promise(resolve => setTimeout(resolve, Math.max(0, next - now())));
+      await request.wait(Math.max(0, next - now()));
       next = now() + intervalMs;
-      timer = setTimeout(() => controller.abort(), timeoutMs);
-      const response = await fetcher(`${PLACE_SEARCH_URL}?q=${encodeURIComponent(query)}&limit=5&lang=en`, {signal: controller.signal, headers: {Accept: 'application/json'}});
+      request.startTimeout(timeoutMs);
+      const response = await request.run(() => fetcher(`${PLACE_SEARCH_URL}?q=${encodeURIComponent(query)}&limit=5&lang=en`, {signal: request.signal, headers: {Accept: 'application/json'}}));
       if (response.status === 429) {next = now() + 60_000; throw new Error('Location search is busy. Wait a minute before trying again.');}
       if (!response.ok) throw new Error('Location search is unavailable. Try again later or enter latitude, longitude.');
-      const places = parsePlaces(await response.json());
+      const places = parsePlaces(await request.run(() => response.json()));
+      request.check();
       if (cache.size >= 30) cache.delete(cache.keys().next().value!);
       cache.set(key, {places, at: now()});
       return places;
     } catch (error) {
-      if (controller.signal.aborted) throw new Error('Location search timed out. Check your connection and try again.');
+      if (request.cancelled) throw new RequestCancelledError();
+      if (request.signal.aborted) throw new Error('Location search timed out. Check your connection and try again.');
       if (error instanceof TypeError) throw new Error('Could not reach location search. Check your connection or enter latitude, longitude.');
       if (error instanceof SyntaxError) throw new Error('Location search returned an unreadable response. Try again.');
       throw error;
-    } finally {clearTimeout(timer); busy = false;}
+    } finally {request.dispose(); busy = false;}
   };
 }
 export const searchPlaces = createPlaceSearch();

@@ -8,7 +8,7 @@ export function nativeMapHTML(generation = 0) {
   .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#191919;color:white}
   .pin{display:block;width:22px;height:22px;border:2px solid #080f10;border-radius:50%;box-shadow:0 2px 5px #0008}
   #error{position:absolute;top:90px;left:12px;right:12px;z-index:1000;color:#dbe7d7;background:#19221ce8;padding:10px;display:none}
-  #retry{display:block;min-height:44px;background:none;border:0;color:#9be570;font:inherit}#retry:disabled{opacity:.5}
+  #retry{display:block;min-height:48px;min-width:48px;background:none;border:0;color:#9be570;font:inherit}#retry:disabled{opacity:.5}
   </style></head><body><div id="map"></div><div id="error" role="status"><span id="tile-message"></span> Loaded routes remain usable.<button id="retry">Retry tiles</button></div>
   <script>
   window.pathfinderBridge=(()=>{

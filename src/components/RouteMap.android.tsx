@@ -58,7 +58,7 @@ export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap({
       }}
       onError={() => session.fail(generation, 'Map could not load. Tap Retry map to reload it.')}
       onRenderProcessGone={() => session.fail(generation, 'The map was interrupted. Tap Retry map to reload it.')} />}
-    {status.status === 'failed' && <View style={{position: 'absolute', top: 90, left: 16, right: 16, padding: 16, backgroundColor: '#19221c'}}><Text accessibilityRole="alert" style={{color: '#fff'}}>{status.error}</Text><Pressable accessibilityRole="button" accessibilityLabel="Retry map" onPress={() => session.start()} style={{padding: 14}}><Text style={{color: '#9be570'}}>Retry map</Text></Pressable></View>}
+    {status.status === 'failed' && <View style={{position: 'absolute', top: 90, left: 16, right: 16, padding: 16, backgroundColor: '#19221c'}}><Text accessibilityRole="alert" style={{color: '#fff'}}>{status.error}</Text><Pressable accessibilityRole="button" accessibilityLabel="Retry map" onPress={() => session.start()} style={{padding: 14, minHeight: 48, minWidth: 48}}><Text style={{color: '#9be570'}}>Retry map</Text></Pressable></View>}
   </View>;
 });
 

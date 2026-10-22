@@ -127,7 +127,7 @@ for (const width of [320, 412]) for (const scale of [1, 2]) {
     await expect(page.getByTestId('discovery-destination')).toHaveText('SM City Masinag');
     const route = page.getByRole('button', {name: 'Select Route 2', exact: true});
     await expect(page.getByRole('button', {name: 'View selected route on map'})).toHaveCount(0);
-    await expect(route).toContainText('Sample fare ₱25');
+    await expect(route).toContainText('Demo fare ₱25');
     await expect(route).toContainText('Less Crowded');
     await expect(route).toContainText('Distance not provided');
     const overflow = await modal.evaluate(element => [...element.querySelectorAll<HTMLElement>('*')].filter(node => node.scrollWidth > node.clientWidth + 2).map(node => node.textContent));

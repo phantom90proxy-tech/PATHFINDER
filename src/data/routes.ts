@@ -1,3 +1,5 @@
+import {validFareAmount} from '../services/fareInformation.ts';
+import {crowdingForRoute} from '../services/transportationInformation.ts';
 export type Coordinate = { latitude: number; longitude: number };
 export type Route = {
   id: string; label: string; origin: string; destination: string;
@@ -30,7 +32,11 @@ export const routes: Route[] = [
 export type Preference = 'Cheapest' | 'Fastest' | 'Less Crowded';
 export function rankedRoutes(preference: Preference): Route[] {
   const field = preference === 'Cheapest' ? 'fare' : preference === 'Fastest' ? 'minutes' : 'crowdRank';
-  return [...routes].sort((a,b) => a[field] - b[field]);
+  return [...routes].sort((a,b) => {
+    const value = (route: Route) => field === 'crowdRank' ? crowdingForRoute(route).rank ?? Infinity : field === 'fare' && !validFareAmount(route.fare) ? Infinity : route[field];
+    const left = value(a), right = value(b);
+    return left === right ? 0 : left < right ? -1 : 1;
+  });
 }
 export function routeCoordinates(route: Route, reversed: boolean): Coordinate[] {
   return reversed ? [...route.coordinates].reverse() : route.coordinates;

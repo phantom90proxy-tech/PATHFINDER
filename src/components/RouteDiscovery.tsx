@@ -1,4 +1,5 @@
 import React from 'react';
+import {rankRoadRoutes, roadRouteComparison, validEstimate} from '../services/roadRouteRanking';
 import {ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Svg, {Path} from 'react-native-svg';
@@ -7,6 +8,12 @@ import {useReducedMotion} from '../hooks/useReducedMotion';
 import type {Place} from '../services/placeSearch';
 import {GoogleMapsButton} from './GoogleMapsButton';
 import {usePrototype} from '../PrototypeState';
+import {useRouteFreshnessNow} from '../hooks/useRouteFreshnessNow';
+import {routeFreshnessLabel} from '../services/routeFreshness';
+import {SaveJourneyButton} from './SaveJourneyButton';
+import {transitAvailability} from '../data/transitAvailability';
+import {fareForRoute, fareLabel, fareDisclosure, demoFareDifference} from '../services/fareInformation';
+import {crowdingForRoute, crowdingLabel, demoCrowdingComparison, transferLabel, transportationInformation, serviceInformationDisclosure} from '../services/transportationInformation';
 
 export type DiscoveryPhase = 'places' | 'loading' | 'results' | 'compare' | 'error' | null;
 type Props = {
@@ -31,16 +38,30 @@ function Action({label, onPress, primary = false}: {label: string; onPress: () =
   </Pressable>;
 }
 
+function RoadFreshness({fetchedAt, cached}: {fetchedAt: number | undefined; cached: boolean}) {
+  const now = useRouteFreshnessNow(fetchedAt);
+  return <Text testID="route-freshness" style={s.meta}>{routeFreshnessLabel(fetchedAt, cached, now)} No live traffic, fares or crowd data. These are car routes, not public transport.</Text>;
+}
+
 export function RouteDiscovery(props: Props) {
   const {phase, origin, destination, driving, routes, selected, reversed, cached, notice, preference, onBack, onClose, onRetry, onSelect, onShowMap} = props;
   const reduced = useReducedMotion();
+  const informationId = React.useId();
   const {location} = usePrototype();
   const insets = useSafeAreaInsets();
   const comparing = phase === 'compare';
   const empty = phase === 'error' && /No driving route|no usable routes|Only SM City/i.test(notice ?? '');
   const title = phase === 'places' ? 'Confirm location' : phase === 'loading' ? 'Find routes' : phase === 'error' ? (empty ? 'No routes found' : 'Routes unavailable') : comparing ? 'Compare routes' : 'Route results';
+  const roadAlternatives = routes.filter(isRoadRoute);
+  const displayedRoutes = driving ? rankRoadRoutes(roadAlternatives) : routes;
   const chosen = routes.find(route => route.id === selected);
+  const fares = routes.map(fareForRoute);
   const snap = chosen ? snappingNotice(chosen) : null;
+  // Normally all alternatives share one fetch. For mixed/invalid data, report
+  // the oldest timestamp or an unknown age rather than overstate freshness.
+  const roadTimestamps = routes.filter(isRoadRoute).map(route => route.fetchedAt);
+  const fetchedAt = roadTimestamps.length && roadTimestamps.every(time => typeof time === 'number' && Number.isFinite(time) && time > 0)
+    ? Math.min(...roadTimestamps) : undefined;
   return <Modal visible={phase !== null} transparent animationType={reduced ? 'none' : 'fade'} onRequestClose={onBack}>
     <View style={[s.backdrop, {paddingTop: insets.top, paddingBottom: insets.bottom}]}>
       <View accessibilityViewIsModal role="dialog" aria-modal={true} accessibilityLabel={title} style={s.sheet} testID="route-discovery">
@@ -57,12 +78,12 @@ export function RouteDiscovery(props: Props) {
           {phase === 'places' && props.places ? <View style={s.cards}>
             <Text style={s.copy}>Choose your {props.places.endpoint}. Check the city and address before continuing.</Text>
             {props.places.choices.map((place, index) => <Action key={index} label={place.label} onPress={() => props.places?.onChoose(place)} />)}
-            <Text style={s.meta}>Location search: Photon ? ? OpenStreetMap contributors</Text>
+            <Text style={s.meta}>Location search: Photon · © OpenStreetMap contributors.</Text>
           </View> : phase === 'loading' ? <View style={s.state}>
             {!reduced && <ActivityIndicator size="small" color={GREEN} />}
             <Text role="status" accessibilityLiveRegion="polite" style={s.section}>Finding driving routes…</Text>
             <Text style={s.copy}>Resolving your stops and checking roads. This may take a few seconds.</Text>
-            <Text style={s.meta}>You can go back while the request finishes.</Text>
+            <Text style={s.meta}>Going back cancels this search.</Text>
           </View> : phase === 'error' ? <View style={s.state}>
             <Text accessibilityRole="alert" style={s.copy}>{notice}</Text>
             {driving && !empty && <Action label="Retry routes" onPress={onRetry} primary />}
@@ -71,19 +92,28 @@ export function RouteDiscovery(props: Props) {
               <Text style={s.section}>{routes.length === 1 ? '1 route available' : `${routes.length} routes available`}</Text>
               <Text style={s.copy}>{comparing ? 'Tap a route to select it and view it on the map.' : 'Choose a route for your journey.'}</Text>
               {routes.length === 1 && <Text style={s.meta}>No alternatives were returned for this journey.</Text>}
-              <Text style={s.meta}>{driving ? (cached ? 'Cached OSRM estimates (up to 5 minutes old). ' : 'OSRM driving estimates. ') + 'No live traffic, fares or crowd data. These are car routes, not public transport.' : 'Demo data · Sample travel times, fares and crowd levels. Not live public transport.'}</Text>
+              {!driving && <Text style={s.meta}>{transitAvailability.demoDisclosure}</Text>}
+              {!driving && <Text style={s.meta}>{fareDisclosure}</Text>}
+              <Text style={s.meta}>{serviceInformationDisclosure}</Text>
+              {driving ? (phase === 'results' || phase === 'compare') && <RoadFreshness key={String(fetchedAt)} fetchedAt={fetchedAt} cached={cached} /> : <Text style={s.meta}>Demo data · Sample travel times, fares and crowd levels. Not live public transport.</Text>}
             </View>
-            <View style={s.cards}>{routes.map((route, index) => {
+            <View style={s.cards}>{displayedRoutes.map((route, index) => {
               const road = isRoadRoute(route), active = route.id === selected;
+              const comparison = road ? roadRouteComparison(route, roadAlternatives) : null;
               const label = routeLabel(route, reversed);
-              return <Pressable key={route.id} accessibilityRole="button" accessibilityLabel={`Select ${label}`} accessibilityState={{selected: active}} aria-pressed={active} onPress={() => {onSelect(route.id); if (comparing) onShowMap();}}
+              return <Pressable key={route.id} accessibilityRole="button" accessibilityLabel={`Select ${label}`} accessibilityHint={`${crowdingLabel(crowdingForRoute(route))}. ${transportationInformation(route).travelTime.label}. ${serviceInformationDisclosure}`} {...(Platform.OS === 'web' ? {'aria-describedby': `${informationId}-${index}`} : {})} accessibilityState={{selected: active}} aria-pressed={active} onPress={() => {onSelect(route.id); if (comparing) onShowMap();}}
                 style={({pressed}) => [s.card, active && s.selected, pressed && s.pressed]}>
-                <View style={s.cardHeading}><Text style={s.routeName}>{label}</Text>{active && <Glyph check />}</View>
-                <Text style={s.duration}>{road ? Math.max(1, Math.round(route.durationSeconds / 60)) : route.minutes}<Text style={s.unit}> min</Text></Text>
-                <Text style={s.meta}>{road ? `${(route.distanceMeters / 1000).toFixed(1)} km · Driving route` : `${route.transport} · Demo data`}</Text>
-                <Text style={s.meta}>{road ? 'Estimated travel time' : `Sample fare ₱${route.fare} · ${route.crowd}`}</Text>
-                {!road && comparing && <Text style={s.meta}>Distance not provided · {route.transfers} {route.transfers === 1 ? 'transfer' : 'transfers'}</Text>}
-                {!road && index === 0 && <Text style={s.accent}>Best for {preference.toLowerCase()}</Text>}
+                <View style={s.cardHeading}><Text style={s.routeName}>{road ? label : `Demo service: ${label}`}</Text>{active && <Glyph check />}</View>
+                {comparison && comparison.badges.length > 0 && <Text style={s.accent}>{comparison.badges.join(' / ')}</Text>}
+                <Text style={s.duration}>{validEstimate(road ? route.durationSeconds : route.minutes) ? road ? Math.max(1, Math.round(route.durationSeconds / 60)) : route.minutes : 'Unavailable'}<Text style={s.unit}>{validEstimate(road ? route.durationSeconds : route.minutes) ? ' min' : ''}</Text></Text>
+                <Text style={s.meta}>{road ? `${validEstimate(route.distanceMeters) ? (route.distanceMeters / 1000).toFixed(1) + ' km' : 'Distance unavailable'} · Driving route` : transportationInformation(route).mode.label}</Text>
+                <Text nativeID={`${informationId}-${index}`} style={s.meta}>{fareLabel(fareForRoute(route))} · {crowdingLabel(crowdingForRoute(route))}</Text>
+                <Text style={s.meta}>{transportationInformation(route).travelTime.label}</Text>
+                {!road && demoFareDifference(fareForRoute(route), fares) && <Text style={s.meta}>{demoFareDifference(fareForRoute(route), fares)}</Text>}
+                {comparison && comparison.differences.map(text => <Text key={text} style={s.meta}>{text}</Text>)}
+                {!road && comparing && <Text style={s.meta}>Distance not provided · {transferLabel(route)}</Text>}
+                {!road && preference === 'Less Crowded' && demoCrowdingComparison(crowdingForRoute(route), routes.map(crowdingForRoute)) && <Text style={s.accent}>Lowest demo crowding</Text>}
+                {!road && index === 0 && preference === 'Fastest' && <Text style={s.accent}>Fastest demo travel time</Text>}
                 <Text style={[s.selection, active && s.accent]}>{active ? 'Selected route' : 'Tap to select route'}</Text>
               </Pressable>;
             })}</View>
@@ -91,6 +121,7 @@ export function RouteDiscovery(props: Props) {
             {chosen && phase === 'results' && <View style={s.actions}>
               <Action label="View selected route on map" onPress={onShowMap} primary />
               <GoogleMapsButton route={chosen} reversed={reversed} location={location} />
+              <SaveJourneyButton route={chosen} reversed={reversed} />
             </View>}
           </>}
           {phase === 'error' && <Action label="Edit journey" onPress={onClose} />}
