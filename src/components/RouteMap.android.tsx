@@ -2,12 +2,14 @@ import React, {forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useS
 import {AppState, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import {WebView} from 'react-native-webview';
 import {nativeMapHTML} from '../map/nativeLeaflet';
+import {useTheme} from '../theme';
 import {createMapSession, type CameraAction} from '../map/mapSession';
 import {isRoadRoute, routeSummary, tripEndpoints, routeLabel} from '../data/roadRoutes';
 import type {MapHandle, RouteMapProps} from './RouteMap.types';
 export type {MapHandle, RouteMapProps} from './RouteMap.types';
 
 export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap({route, routes, reversed, location, overlays, reducedMotion, onSelect}, ref) {
+  const {mode} = useTheme();
   const web = useRef<WebView>(null);
   const [session] = useState(() => createMapSession());
   const [status, setStatus] = useState(session.snapshot);
@@ -15,7 +17,7 @@ export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap({
   const sent = useRef<{generation: number; geometry: string} | null>(null);
   const source = useMemo(() => ({html: nativeMapHTML(generation)}), [generation]);
   const geometry = useMemo(() => JSON.stringify(routes.map(item => ({...item, label: routeLabel(item, reversed), endpoints: tripEndpoints(item, reversed), road: isRoadRoute(item), summary: routeSummary(item)}))), [routes, reversed]);
-  const payload = useMemo(() => ({selected: route?.id, reversed, location, top: overlays?.top ?? 84, bottom: overlays?.bottom ?? 200, reduced: reducedMotion}), [route?.id, reversed, location, overlays, reducedMotion]);
+  const payload = useMemo(() => ({selected: route?.id, reversed, location, top: overlays?.top ?? 84, bottom: overlays?.bottom ?? 200, reduced: reducedMotion, theme: mode}), [route?.id, reversed, location, overlays, reducedMotion, mode]);
   useEffect(() => {
     session.subscribe(setStatus);
     session.start();

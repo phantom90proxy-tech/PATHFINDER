@@ -6,6 +6,11 @@ export function nativeMapHTML(generation = 0) {
   .leaflet-tile-pane{filter:invert(1) hue-rotate(160deg) saturate(.55) brightness(.8)}
   .leaflet-control-attribution{background:#080f10e6;color:#b8f28b;font-size:10px}.leaflet-control-attribution a{color:#8dd8af}
   .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#191919;color:white}
+  html.light .leaflet-tile-pane{filter:none}
+  html.light,html.light body,html.light #map{background:#f5f8f3}
+  html.light .leaflet-control-attribution{background:#ffffffed;color:#386b27}
+  html.light .leaflet-control-attribution a{color:#386b27}
+  html.light .leaflet-popup-content-wrapper,html.light .leaflet-popup-tip{background:#fff;color:#172510}
   .pin{display:block;width:22px;height:22px;border:2px solid #080f10;border-radius:50%;box-shadow:0 2px 5px #0008}
   #error{position:absolute;top:90px;left:12px;right:12px;z-index:1000;color:#dbe7d7;background:#19221ce8;padding:10px;display:none}
   #retry{display:block;min-height:48px;min-width:48px;background:none;border:0;color:#9be570;font:inherit}#retry:disabled{opacity:.5}
@@ -48,6 +53,7 @@ export function nativeMapHTML(generation = 0) {
     window.pathfinder={update(next){
       if(disposed)return;
       const previous=state;state={...state,...next};
+      document.documentElement.classList.toggle('light',state.theme==='light');
       document.querySelector('.leaflet-bottom').style.bottom=state.bottom+'px';map.invalidateSize({pan:false});
       const road=state.routes.some(r=>r.road),credit='Routing: <a href="https://project-osrm.org">OSRM</a>';
       if(road!==roadCredit){map.attributionControl[road?'addAttribution':'removeAttribution'](credit);roadCredit=road;}

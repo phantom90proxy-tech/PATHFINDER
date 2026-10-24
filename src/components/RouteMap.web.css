@@ -12,3 +12,10 @@
 .pathfinder-map-error { position: absolute; top: 84px; left: 16px; right: 16px; padding: 12px; background: #191919; color: #b8f28b; z-index: 1000; font-family: sans-serif; }
 .pathfinder-map-error button { display: block; min-height: 44px; background: none; border: 0; color: #9be570; font: inherit; cursor: pointer; }
 .pathfinder-map-error button:disabled { opacity: .5; cursor: default; }
+.pathfinder-map-light .leaflet-container { background: #f5f8f3; }
+.pathfinder-map-light .leaflet-tile-pane { filter: none; }
+.pathfinder-map-light .leaflet-control-attribution { background: #ffffffed; color: #386b27; }
+.pathfinder-map-light .leaflet-control-attribution a { color: #386b27; }
+.pathfinder-map-light .leaflet-popup-content-wrapper,
+.pathfinder-map-light .leaflet-popup-tip { background: #fff; color: #172510; }
+.pathfinder-map-light .pathfinder-map-error { background: #fff; color: #172510; }

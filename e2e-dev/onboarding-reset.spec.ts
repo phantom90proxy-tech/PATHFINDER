@@ -1,0 +1,51 @@
+import {test, expect} from '@playwright/test';
+
+test.beforeEach(async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  await page.route('https://tile.openstreetmap.org/**', route => route.fulfill({contentType: 'image/png', path: 'e2e/fixtures/tile.png'}));
+});
+test('confirmed development reset preserves data and enables the next cold launch', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Open profile', exact: true}).click();
+  const before = await page.evaluate(() => Object.fromEntries(['pathfinder.saved-journeys.v1', 'pathfinder.journey-history.v1', 'pathfinder.appearance'].map(key => [key, localStorage.getItem(key)])));
+  await page.getByRole('button', {name: 'Reset Onboarding (DEV)', exact: true}).click();
+  const dialog = page.getByTestId('onboarding-reset-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('heading', {name: 'Reset onboarding?', exact: true})).toBeVisible();
+  const box = await dialog.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  expect(await page.evaluate(() => localStorage.getItem('pathfinder.onboarding.v1'))).toBe('complete');
+  await page.getByRole('button', {name: 'Cancel onboarding reset', exact: true}).click();
+  expect(await page.evaluate(() => localStorage.getItem('pathfinder.onboarding.v1'))).toBe('complete');
+  await page.getByRole('button', {name: 'Reset Onboarding (DEV)', exact: true}).click();
+  await page.getByRole('button', {name: 'Confirm onboarding reset', exact: true}).click();
+  await expect(dialog.getByRole('status')).toHaveText('Onboarding reset successfully. Fully close and reopen PATHFINDER to see onboarding again.');
+  expect(await page.evaluate(() => localStorage.getItem('pathfinder.onboarding.v1'))).toBeNull();
+  expect(await page.evaluate(keys => Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)])), Object.keys(before))).toEqual(before);
+  await page.getByRole('button', {name: 'Dismiss onboarding reset result', exact: true}).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByTestId('profile-panel')).toBeVisible();
+  await expect(page).toHaveURL('/');
+  await page.reload();
+  await expect(page.getByRole('button', {name: 'Skip onboarding', exact: true})).toBeVisible({timeout: 12000});
+  await page.getByRole('button', {name: 'Onboarding page 3', exact: true}).click();
+  await page.getByRole('button', {name: 'Get started', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Open profile', exact: true})).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('pathfinder.onboarding.v1'))).toBe('complete');
+  await page.reload();
+  await page.getByRole('button', {name: 'Open profile', exact: true}).click();
+  await expect(page.getByTestId('onboarding')).toHaveCount(0);
+});
+test('failed storage removal shows an error and keeps completion', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Open profile', exact: true}).click();
+  await page.evaluate(() => {const original = Storage.prototype.removeItem; let fail = true; Storage.prototype.removeItem = function(key: string) {if (key === 'pathfinder.onboarding.v1' && fail) {fail = false; throw new Error('Reset test failure');} return original.call(this, key);};});
+  await page.getByRole('button', {name: 'Reset Onboarding (DEV)', exact: true}).click();
+  await page.getByRole('button', {name: 'Confirm onboarding reset', exact: true}).click();
+  await expect(page.getByRole('alert')).toContainText('Reset failed');
+  expect(await page.evaluate(() => localStorage.getItem('pathfinder.onboarding.v1'))).toBe('complete');
+  await page.getByRole('button', {name: 'Retry onboarding reset', exact: true}).click();
+  await expect(page.getByRole('status')).toHaveText('Onboarding reset successfully. Fully close and reopen PATHFINDER to see onboarding again.');
+  expect(await page.evaluate(() => localStorage.getItem('pathfinder.onboarding.v1'))).toBeNull();
+});

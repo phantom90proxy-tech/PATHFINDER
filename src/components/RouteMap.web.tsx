@@ -1,4 +1,5 @@
 import React, {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react';
+import {useTheme} from '../theme';
 import type * as Leaflet from 'leaflet';
 import {isRoadRoute, routeSummary, routeLabel, tripEndpoints} from '../data/roadRoutes';
 import {mapViewport} from '../data/mapViewport';
@@ -27,6 +28,7 @@ function popup(title: string, description: string) {
 export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap(
   {route, routes, location, reversed, onSelect, width, height, overlays, reducedMotion = false}, ref,
 ) {
+  const {mode} = useTheme();
   const container = useRef<HTMLDivElement>(null);
   const select = useRef(onSelect);
   const [runtime, setRuntime] = useState<Runtime | null>(null);
@@ -172,7 +174,7 @@ export const RouteMap = forwardRef<MapHandle, RouteMapProps>(function RouteMap(
     return () => cancelAnimationFrame(frame);
   }, [runtime, route, routes, reversed, fit, width, height, overlays]);
 
-  return <div className="pathfinder-browser-map" data-testid="interactive-map"
+  return <div className={`pathfinder-browser-map${mode === 'light' ? ' pathfinder-map-light' : ''}`} data-testid="interactive-map"
     style={{position: 'absolute', inset: 0, isolation: 'isolate', zIndex: 0,
       '--map-panel-padding': `${mapViewport(width, height, overlays).mapPadding.bottom}px`} as React.CSSProperties}>
     <div ref={container} aria-label="Interactive route map" style={{width: '100%', height: '100%'}} />

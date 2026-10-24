@@ -1,3 +1,5 @@
+import {useThemeStyles} from '../theme';
+import {BackButton} from './BackButton';
 import React, {useState} from 'react';
 import {Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {router} from 'expo-router';
@@ -9,15 +11,19 @@ import {useRouteFreshnessNow} from '../hooks/useRouteFreshnessNow';
 import {routeFreshnessLabel} from '../services/routeFreshness';
 
 function HistoricalAge({route}: {route: RoadRoute}) {
+  const s = useThemeStyles(baseStyles);
   const now = useRouteFreshnessNow(route.fetchedAt);
   return <Text style={s.copy}>{routeFreshnessLabel(route.fetchedAt, true, now)}</Text>;
 }
 function Action({label, onPress, disabled = false}: {label: string; onPress: () => void; disabled?: boolean}) {
+  const s = useThemeStyles(baseStyles);
+
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
     style={({pressed}) => [s.button, (pressed || disabled) && {opacity: 0.6}]}><Text style={s.action}>{label}</Text></Pressable>;
 }
 
 export function JourneyHistoryScreen() {
+  const s = useThemeStyles(baseStyles);
   const {journeyHistory: {state, store}} = usePrototype();
   const reduced = useReducedMotion();
   const [selected, setSelected] = useState<string | null>(null);
@@ -27,11 +33,10 @@ export function JourneyHistoryScreen() {
   const title = clearing ? 'Clear History?' : 'Delete history journey?';
   const pendingDelete = confirmation?.kind === 'delete' ? state.items.find(item => item.id === confirmation.id) : null;
   return <View style={s.fill}>
-    <View style={s.header}>
-      <Action label={journey ? 'Back to journey history' : 'Back to map'} onPress={() => journey ? setSelected(null) : router.dismissTo('/')} />
+    <View style={s.header}><BackButton label="Go back" onPress={() => journey ? setSelected(null) : router.dismissTo('/')} />
       <Text accessibilityRole="header" style={s.heading}>{journey ? 'Historical journey' : 'Journey History'}</Text>
     </View>
-    <ScrollView contentContainerStyle={s.content}>
+    <ScrollView style={s.list} contentContainerStyle={s.content}>
       <Text style={s.copy}>Your last 20 explicitly selected journeys, newest first, stored only on this device. No background location tracking or unconfirmed searches are recorded.</Text>
       <Text style={s.copy}>Previously retrieved information: routes, travel times, fares and crowd levels may be outdated and are not live. Viewing history does not refresh routes or change the active journey. Offline details do not provide offline maps or navigation.</Text>
       {state.error && <View style={s.card}><Text accessibilityRole="alert" style={s.copy}>{state.error}</Text>
@@ -56,6 +61,7 @@ export function JourneyHistoryScreen() {
         <Action label={`Delete history journey ${tripTitle(item.route)} ${item.route.label}`} disabled={state.busy} onPress={() => setConfirmation({kind: 'delete', id: item.id})} />
       </View>)}
       <Action label="Clear History" disabled={state.busy || (state.ready && state.items.length === 0)} onPress={() => setConfirmation({kind: 'clear'})} />
+      <Action label={journey ? 'Back to journey history' : 'Back to map'} onPress={() => journey ? setSelected(null) : router.dismissTo('/')} />
     </ScrollView>
     <Modal visible={confirmation !== null} transparent animationType={reduced ? 'none' : 'fade'} onRequestClose={() => setConfirmation(null)}>
       <View style={s.backdrop}><View accessibilityViewIsModal role="dialog" aria-modal={true} accessibilityLabel={title} style={s.dialog}>
@@ -73,8 +79,10 @@ export function JourneyHistoryScreen() {
     </Modal>
   </View>;
 }
-const s = StyleSheet.create({
-  fill: {flex: 1, backgroundColor: '#000000'}, header: {padding: 16, gap: 12},
+const baseStyles = StyleSheet.create({
+
+  fill: {flex: 1, backgroundColor: '#000000'}, header: {padding: 16, gap: 12, flexDirection: 'row', alignItems: 'center'},
+  list: {flex: 1},
   content: {padding: 16, paddingBottom: 32, gap: 16, width: '100%', maxWidth: 600, alignSelf: 'center'},
   heading: {fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 26, color: '#edf3ea'},
   copy: {fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 21, color: '#b6c1b9'},

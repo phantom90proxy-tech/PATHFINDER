@@ -1,6 +1,7 @@
 import React, {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 import MapView, {Marker, Polyline} from 'react-native-maps';
+import {useTheme} from '../theme';
 import {isRoadRoute, routeSummary, routeLabel, tripEndpoints} from '../data/roadRoutes';
 import {mapViewport} from '../data/mapViewport';
 import type {MapHandle, RouteMapProps as Props} from './RouteMap.types';
@@ -18,6 +19,7 @@ const darkStyle = [
 ];
 
 export const RouteMap = forwardRef<MapHandle, Props>(function RouteMap({route, routes, location, reversed, onSelect, width, height, overlays, reducedMotion = false}, ref) {
+  const {mode} = useTheme();
   const map = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
   const [laidOut, setLaidOut] = useState(false);
@@ -35,7 +37,7 @@ export const RouteMap = forwardRef<MapHandle, Props>(function RouteMap({route, r
   const others = routes.filter(r => r.id !== route?.id);
   return <View style={StyleSheet.absoluteFill}>
     <MapView ref={map} testID="interactive-map" style={StyleSheet.absoluteFill}
-      customMapStyle={darkStyle} userInterfaceStyle="dark"
+      customMapStyle={mode === 'dark' ? darkStyle : []} userInterfaceStyle={mode}
       initialRegion={{latitude:14.6234,longitude:121.1448,latitudeDelta:0.035,longitudeDelta:0.07}}
       onMapReady={() => setReady(true)} onLayout={() => setLaidOut(true)}
       scrollEnabled zoomEnabled rotateEnabled pitchEnabled

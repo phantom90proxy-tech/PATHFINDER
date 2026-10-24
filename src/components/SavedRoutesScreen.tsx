@@ -1,3 +1,5 @@
+import {useThemeStyles} from '../theme';
+import {BackButton} from './BackButton';
 import React, {useCallback, useEffect, useState, useSyncExternalStore} from 'react';
 import {Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {router, useFocusEffect, useNavigation} from 'expo-router';
@@ -11,16 +13,20 @@ import {createSavedRouteRefresher} from '../services/savedRouteRefresh';
 import {requestRoadRoutes} from '../services/roadRoutingClient';
 
 function SavedAge({fetchedAt}: {fetchedAt: number}) {
+  const s = useThemeStyles(baseStyles);
   const now = useRouteFreshnessNow(fetchedAt);
   return <Text style={s.copy}>{routeFreshnessLabel(fetchedAt, true, now)}</Text>;
 }
 
 function Action({label, onPress, disabled = false}: {label: string; onPress: () => void; disabled?: boolean}) {
+  const s = useThemeStyles(baseStyles);
+
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
     style={({pressed}) => [s.button, (pressed || disabled) && {opacity: 0.6}]}><Text style={s.action}>{label}</Text></Pressable>;
 }
 
 export function SavedRoutesScreen() {
+  const s = useThemeStyles(baseStyles);
   const {savedJourneys: {state, store}} = usePrototype();
   const [refresher] = useState(() => createSavedRouteRefresher(store, requestRoadRoutes));
   const refresh = useSyncExternalStore(refresher.subscribe, refresher.getSnapshot, refresher.getSnapshot);
@@ -34,7 +40,7 @@ export function SavedRoutesScreen() {
   const journey = state.items.find(item => item.id === selected);
   const pendingDelete = state.items.find(item => item.id === deleting);
   return <View style={s.fill}>
-    <View style={s.header}><Action label={journey ? 'Back to saved routes' : 'Back to map'} onPress={() => {refresher.reset(); if (journey) setSelected(null); else router.dismissTo('/');}} />
+    <View style={s.header}><BackButton label="Go back" onPress={() => {refresher.reset(); if (journey) setSelected(null); else router.dismissTo('/');}} />
       <Text accessibilityRole="header" style={s.heading}>{journey ? 'Saved journey' : 'Saved routes'}</Text></View>
     <ScrollView contentContainerStyle={s.content}>
       <Text style={s.copy}>Saved details are available offline. Maps and navigation still require their own connectivity. Travel times, routes, and sample fares or crowds may be outdated.</Text>
@@ -67,6 +73,7 @@ export function SavedRoutesScreen() {
         <Action label={`Open saved journey ${tripTitle(item.route)} ${item.route.label}`} onPress={() => {refresher.reset(); setSelected(item.id);}} />
         <Action label={`Delete saved journey ${tripTitle(item.route)} ${item.route.label}`} disabled={state.busy} onPress={() => setDeleting(item.id)} />
       </View>)}
+      <Action label={journey ? 'Back to saved routes' : 'Back to map'} onPress={() => {refresher.reset(); if (journey) setSelected(null); else router.dismissTo('/');}} />
     </ScrollView>
     <Modal visible={!!pendingDelete} transparent animationType={reduced ? 'none' : 'fade'} onRequestClose={() => setDeleting(null)}>
       <View style={s.backdrop}><View accessibilityViewIsModal role="dialog" aria-modal={true} accessibilityLabel="Delete saved journey?" style={s.dialog}>
@@ -83,8 +90,9 @@ export function SavedRoutesScreen() {
     </Modal>
   </View>;
 }
-const s = StyleSheet.create({
-  fill: {flex: 1, backgroundColor: '#000000'}, header: {padding: 16, gap: 12},
+const baseStyles = StyleSheet.create({
+
+  fill: {flex: 1, backgroundColor: '#000000'}, header: {padding: 16, gap: 12, flexDirection: 'row', alignItems: 'center'},
   content: {padding: 16, paddingBottom: 32, gap: 16, width: '100%', maxWidth: 600, alignSelf: 'center'},
   heading: {fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 26, color: '#edf3ea'},
   copy: {fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 21, color: '#b6c1b9'},

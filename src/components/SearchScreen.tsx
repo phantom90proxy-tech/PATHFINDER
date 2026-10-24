@@ -1,3 +1,4 @@
+import {useTheme, useThemeStyles} from '../theme';
 import React, {useContext, useEffect, useRef, useState} from 'react';
 import {Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle} from 'react-native';
 import Svg, {Circle, Path, Rect} from 'react-native-svg';
@@ -11,12 +12,12 @@ import {RouteDiscovery, type DiscoveryPhase} from './RouteDiscovery';
 import type {Endpoint} from '../services/endpointConfirmations';
 import {isRequestCancelled} from '../services/requestCancellation';
 import {transitAvailability} from '../data/transitAvailability';
-import {fareDisclosure, fareLabel} from '../services/fareInformation';
-import {serviceInformationDisclosure} from '../services/transportationInformation';
+import {fareLabel} from '../services/fareInformation';
 
 const GREEN = '#9be570';
 type Glyph = 'back' | 'arrow' | 'pin' | 'target' | 'swap' | 'wallet' | 'bolt' | 'people' | 'bus' | 'train' | 'car' | 'compare' | 'close' | 'info';
 function Icon({name, color = '#a9b6ae', size = 22}: {name: Glyph; color?: string; size?: number}) {
+  const {mode} = useTheme();
   const paths: Record<Glyph, string> = {
     back: 'M19 12H5m6-6-6 6 6 6', arrow: 'M5 12h14m-6-6 6 6-6 6',
     pin: 'M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z',
@@ -29,7 +30,7 @@ function Icon({name, color = '#a9b6ae', size = 22}: {name: Glyph; color?: string
     car: 'm4 10 2-6h12l2 6M4 10h16v8H4v-8ZM6 18v3m12-3v3M7 14h.1m10 0h.1',
     compare: 'M6 3v18M18 3v18M3 7h6m6 10h6M3 14h6m6-7h6', close: 'm6 6 12 12M6 18 18 6', info: 'M12 11v6m0-10v.1',
   };
-  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" {...(Platform.OS === 'web' ? {'aria-hidden': true, focusable: false} : {accessible: false})}>
+  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={mode === 'light' ? '#386b27' : color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" {...(Platform.OS === 'web' ? {'aria-hidden': true, focusable: false} : {accessible: false})}>
     {name === 'target' && <><Circle cx={12} cy={12} r={7} /><Circle cx={12} cy={12} r={2} /></>}
     {name === 'pin' && <Circle cx={12} cy={10} r={2} />}
     {name === 'people' && <Circle cx={9} cy={7} r={4} />}
@@ -40,6 +41,7 @@ function Icon({name, color = '#a9b6ae', size = 22}: {name: Glyph; color?: string
   </Svg>;
 }
 function Button({label, onPress, style, children, selected, disabled}: {label: string; onPress: () => void; style?: StyleProp<ViewStyle>; children: React.ReactNode; selected?: boolean; disabled?: boolean}) {
+  const s = useThemeStyles(baseStyles);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} accessibilityState={{selected, disabled}} aria-pressed={selected} onPress={onPress}
     style={({pressed}) => [s.button, style, (pressed || disabled) && s.pressed]}>{children}</Pressable>;
 }
@@ -55,10 +57,11 @@ const suggestions: {title: string; detail: string; icon: Glyph}[] = [
 const preferences: {label: Preference; icon: Glyph}[] = [{label: 'Cheapest', icon: 'wallet'}, {label: 'Fastest', icon: 'bolt'}, {label: 'Less Crowded', icon: 'people'}];
 
 export function SearchScreen({onReturnHome}: {onReturnHome: () => void}) {
+  const {color, mode} = useTheme();
+  const s = useThemeStyles(baseStyles);
   const session = useContext(SearchSessionContext);
   if (!session) throw new Error('Search session provider missing');
-  const {journeyHistory, rememberJourney} = usePrototype();
-  const {origin, setOrigin, destination, setDestination, confirmations, swapEndpoints, preference, setPreference, selected, selectedRoad, setSelected, setReversed, cleared, setCleared, searchMode, setSearchMode, setMapMode, setRoadRoutes, setSelectedRoad, location, locate, locating, locationError} = usePrototype();
+  const {origin, setOrigin, destination, setDestination, confirmations, swapEndpoints, preference, setPreference, selected, selectedRoad, setSelected, cleared, setCleared, searchMode, setSearchMode, setRoadRoutes, setSelectedRoad, location, locate, locating, locationError} = usePrototype();
   const [focused, setFocused] = useState<'origin' | 'destination' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [phase, setPhase] = useState<DiscoveryPhase>(null);
@@ -76,20 +79,11 @@ export function SearchScreen({onReturnHome}: {onReturnHome: () => void}) {
   const validate = () => {if (matchesDemo(origin, destination)) return true; unavailable(); return false;};
   const selectRoute = (id: string, choices = roadChoices) => {
     if (!session.isActive()) return;
-    if (driving) {setRoadRoutes(choices); setSelectedRoad(id); setMapMode('driving');}
-    else {setSelected(id); setReversed(demoReversed); setMapMode('demo');}
+    if (driving) {setRoadRoutes(choices); setSelectedRoad(id);}
+    else setSelected(id);
   };
   const leave = () => {session.exit(); Keyboard.dismiss(); setPhase(null); onReturnHome();};
-  const recordSelection = (id: string) => {
-    if (!session.isActive()) return;
-    const route = (driving ? roadChoices : rankedRoutes(preference)).find(item => item.id === id);
-    if (route) {rememberJourney(route, !driving && demoReversed); void journeyHistory.store.record(route, !driving && demoReversed).catch(() => {});}
-  };
-  const selectExplicitly = (id: string) => {selectRoute(id); recordSelection(id);};
-  const confirmAndLeave = () => {
-    if (phase === 'results') recordSelection(driving ? selectedRoad : selected);
-    leave();
-  };
+  const selectExplicitly = (id: string) => {selectRoute(id);};
   const closeDiscovery = () => {session.cancelRequest(); setPhase(null); setNotice(null);};
   // Native Modal owns Android Back while visible; pending work uses the same exit guard.
   const discoveryBack = () => {if (phase === 'loading') leave(); else if (phase === 'compare') setPhase('results'); else closeDiscovery();};
@@ -150,18 +144,18 @@ export function SearchScreen({onReturnHome}: {onReturnHome: () => void}) {
       </View>
       <View style={s.locationCard} onLayout={({nativeEvent: {layout}}) => setCardSize(current => current.width === layout.width && current.height === layout.height ? current : {width: layout.width, height: layout.height})}>
         {cardSize.width > 0 && <Svg pointerEvents="none" {...(Platform.OS === 'web' ? {'aria-hidden': true, focusable: false} : {accessible: false})} style={StyleSheet.absoluteFill} width={cardSize.width} height={cardSize.height}>
-          <Path fill="#19221c" stroke="#334039" strokeWidth={1} d={`M25 1 H${cardSize.width - 88} Q${cardSize.width - 72} 1 ${cardSize.width - 72} 17 V43 Q${cardSize.width - 72} 59 ${cardSize.width - 56} 59 H${cardSize.width - 25} Q${cardSize.width - 1} 59 ${cardSize.width - 1} 83 V${cardSize.height - 25} Q${cardSize.width - 1} ${cardSize.height - 1} ${cardSize.width - 25} ${cardSize.height - 1} H25 Q1 ${cardSize.height - 1} 1 ${cardSize.height - 25} V25 Q1 1 25 1 Z`} />
+          <Path fill={color('#19221c')} stroke={color('#334039')} strokeWidth={1} d={`M25 1 H${cardSize.width - 88} Q${cardSize.width - 72} 1 ${cardSize.width - 72} 17 V43 Q${cardSize.width - 72} 59 ${cardSize.width - 56} 59 H${cardSize.width - 25} Q${cardSize.width - 1} 59 ${cardSize.width - 1} 83 V${cardSize.height - 25} Q${cardSize.width - 1} ${cardSize.height - 1} ${cardSize.width - 25} ${cardSize.height - 1} H25 Q1 ${cardSize.height - 1} 1 ${cardSize.height - 25} V25 Q1 1 25 1 Z`} />
         </Svg>}
         <Button label="Swap origin and destination" disabled={routing || locating} style={s.swap} onPress={swapEndpoints}><Icon name="swap" size={21} color={GREEN} /></Button>
         <View style={[s.field, s.originField, focused === 'origin' && s.fieldFocused]}>
           <Icon name="target" color={GREEN} /><View style={s.grow}><Text style={s.fieldLabel}>FROM</Text><TextInput editable={!routing && !locating} accessibilityLabel="Origin" value={origin} onChangeText={setOrigin}
-            placeholder="Where are you starting?" placeholderTextColor="#78887e" style={s.input} selectionColor={GREEN} autoCorrect={false}
+            placeholder="Where are you starting?" placeholderTextColor="#78887e" style={s.input} selectionColor={mode === 'light' ? '#386b27' : GREEN} autoCorrect={false}
             onFocus={() => setFocused('origin')} onBlur={() => setFocused(null)} returnKeyType="next" onSubmitEditing={() => destinationInput.current?.focus()} /></View>
         </View>
         <View style={s.divider} />
         <View style={[s.field, focused === 'destination' && s.fieldFocused]}>
           <Icon name="pin" color={GREEN} /><View style={s.grow}><Text style={s.fieldLabel}>TO</Text><TextInput ref={destinationInput} editable={!routing} accessibilityLabel="Destination" value={destination} onChangeText={setDestination}
-            placeholder="Where do you want to go?" placeholderTextColor="#a9b6ae" style={s.input} selectionColor={GREEN} autoCorrect={false}
+            placeholder="Where do you want to go?" placeholderTextColor="#a9b6ae" style={s.input} selectionColor={mode === 'light' ? '#386b27' : GREEN} autoCorrect={false}
             onFocus={() => setFocused('destination')} onBlur={() => setFocused(null)} returnKeyType="search" onSubmitEditing={find} /></View>
         </View>
       </View>
@@ -172,10 +166,7 @@ export function SearchScreen({onReturnHome}: {onReturnHome: () => void}) {
         {locationError && <Text accessibilityRole="alert" style={s.modalCopy}>{locationError}</Text>}
       </View>}
       {!driving && <View style={s.preferenceSection}>
-        <Text style={s.meta}>{transitAvailability.message}</Text>
-        <Text style={s.meta}>{transitAvailability.demoDisclosure}</Text>
-        <Text style={s.meta}>{fareDisclosure}</Text>
-        <Text style={s.meta}>{serviceInformationDisclosure}</Text>
+        <Text style={s.meta}>Demo only · Routes, fares, times and crowd levels are samples. No verified stops, schedules or live transit data.</Text>
         <Text style={s.sectionLabel}>What matters most?</Text>
         <View style={s.preferences}>{preferences.map(item => <Button key={item.label} label={item.label === 'Cheapest' ? 'Sort by lowest demo fare' : item.label === 'Less Crowded' ? 'Sort by demo crowding' : `Sort by ${item.label}`} selected={preference === item.label}
           onPress={() => setPreference(item.label)} style={[s.preference, preference === item.label && s.preferenceSelected]}>
@@ -202,10 +193,10 @@ export function SearchScreen({onReturnHome}: {onReturnHome: () => void}) {
       routes={driving ? roadChoices : rankedRoutes(preference)} selected={driving ? selectedRoad : selected}
       reversed={!driving && demoReversed} cached={cached} notice={notice} preference={preference}
       onBack={discoveryBack} onClose={closeDiscovery} onRetry={() => void routeRoad(false)}
-      onSelect={selectExplicitly} onShowMap={confirmAndLeave} />
+      onSelect={selectExplicitly} />
   </KeyboardAvoidingView>;
 }
-const s = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   fill: {flex: 1, backgroundColor: '#000000'}, grow: {flex: 1, minWidth: 0},
   button: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48}, pressed: {opacity: 0.7},
   header: {flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 22, width: '100%', maxWidth: 600, alignSelf: 'center'},

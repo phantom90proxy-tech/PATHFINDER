@@ -1,0 +1,34 @@
+import {test, expect} from '@playwright/test';
+
+test('profile appearance updates the app and survives reload', async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  await page.route('https://tile.openstreetmap.org/**', route => route.fulfill({contentType: 'image/png', path: 'e2e/fixtures/tile.png'}));
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Open profile', exact: true}).click();
+  await page.getByRole('radio', {name: 'Light mode', exact: true}).click();
+  await expect(page.getByRole('radio', {name: 'Light mode', exact: true})).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('profile-panel')).toHaveCSS('background-color', 'rgb(227, 233, 222)');
+  await page.getByRole('button', {name: 'Close panel', exact: true}).click();
+  await expect(page.locator('.pathfinder-map-light')).toHaveCount(1);
+  await page.reload();
+  await page.getByRole('button', {name: 'Open profile', exact: true}).click();
+  await expect(page.getByRole('radio', {name: 'Light mode', exact: true})).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('button', {name: 'Close panel', exact: true}).click();
+  await page.getByRole('button', {name: 'Open menu', exact: true}).click();
+  await page.getByRole('button', {name: 'About PATHFINDER', exact: true}).click();
+  await expect(page.getByRole('heading', {name: 'About PATHFINDER', exact: true})).toHaveCSS('color', 'rgb(23, 37, 16)');
+  await page.getByRole('button', {name: 'Back to home', exact: true}).click();
+  await page.getByRole('button', {name: 'Where to? Search routes', exact: true}).click();
+  await page.getByRole('button', {name: 'Public transport demo', exact: true}).click();
+  const suggestion = page.getByRole('button', {name: 'Choose SM City Masinag - Cogeo Gate 2', exact: true});
+  await expect(suggestion.locator('..')).toHaveCSS('background-color', 'rgb(227, 233, 222)');
+  await suggestion.click();
+  const destination = page.getByRole('textbox', {name: 'Destination', exact: true});
+  await destination.focus();
+  await expect(destination.locator('../..')).toHaveCSS('background-color', 'rgb(204, 221, 194)');
+  await page.screenshot({path: 'test-results/light-mode-search-412.png'});
+  await page.getByRole('button', {name: 'Back to map', exact: true}).click();
+  await page.getByRole('button', {name: 'Open profile', exact: true}).click();
+  await page.getByRole('radio', {name: 'Dark mode', exact: true}).click();
+  await expect(page.getByTestId('profile-panel')).toHaveCSS('background-color', 'rgb(28, 38, 31)');
+});
